@@ -1,0 +1,48 @@
+name: Build HTML to APK
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Cordova
+        run: npm install -g cordova
+
+      - name: Create Cordova Project & Build
+        run: |
+          cordova create myapp com.example.myapp "MyHTMLApp"
+          rm -rf myapp/www/*
+          cp -r index.html myapp/www/ || true
+          # Also copy assets if they exist (ignoring errors if they don't)
+          cp -r *.css myapp/www/ 2>/dev/null || true
+          cp -r *.js myapp/www/ 2>/dev/null || true
+          cp -r *.png myapp/www/ 2>/dev/null || true
+          cp -r *.jpg myapp/www/ 2>/dev/null || true
+          cd myapp
+          cordova platform add android
+          cordova build android --debug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: myapp/platforms/android/app/build/outputs/apk/debug/app-debug.apk

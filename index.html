@@ -2,19 +2,19 @@
 <html lang="en">
 <head>
 <!-- ═══════════════════════════════════════════════════════════════════
-  WARDROBE v1.10 — single-file Wardrobe Management PWA
+  WARDROBE v1.11 — single-file Wardrobe Management PWA
   ─────────────────────────────────────────────────────────────────────
-  v1.10 FIXES — AI STYLE MATCH NOW RELIABLE:
-   • 404 fix: OpenRouter retires free models often; app now fetches the
-     LIVE free-vision model list from OpenRouter's public catalog and
-     auto-fails-over through models until one answers (404/429 → next)
-   • Hardcoded backup chain: gemma-4-31b:free, mistral-small-3.2-24b:free,
-     gemma-3-27b/12b/4b:free
-   • Remembers the last working model for next time
-   • ⚙ settings now SHOWS the saved key (was blank before) + optional
-     Model field (blank = automatic) + "key saved" confirmation
-   • Clearer statuses/errors; 📴 Offline match always available
-  v1.9 • AI Style Match (OpenRouter) · v1.8 zoom fix · v1.7 zoom buttons
+  v1.11 FIX — MODEL SELECTION REBUILT:
+   • If a Model is set in ⚙ → ONLY that model is used (any model:
+     vision OR text). No silent switching to other models.
+   • Text-only models (e.g. Nvidia free) now work: if the model rejects
+     the image, the SAME model is retried in text-only mode.
+   • Failures show the exact OpenRouter error + action buttons
+     (⚙ Fix model / ✨ Auto models / 📴 Offline) instead of silently
+     falling over to another model.
+   • Auto mode (Model blank): last-good → proven vision fallbacks →
+     live free-vision catalog; result label names the model used.
+  v1.10 • live free-vision discovery + failover · key visible in ⚙
   INTRO VIDEO: "intro.mp4" beside this HTML, or base64/https in
   INTRO_VIDEO (Module 12). STORAGE: IndexedDB items
   { id,name,desc,cat,sub,date,fav,imgs:[dataURL,…] } + localStorage cats.
@@ -572,6 +572,8 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
 .mr-main h4{font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mr-main p{font-size:11px;color:var(--mut);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mr-main .why{display:block;font-size:11px;color:var(--rust-d);margin-top:3px;line-height:1.4}
+.ai-err-actions{display:flex;gap:8px;margin-top:10px}
+.ai-err-actions .btn{flex:1;padding:10px 4px;font-size:12px}
 
 /* tutorial */
 .tut-row{display:flex;gap:14px;align-items:flex-start;padding:13px 0;border-bottom:1.5px dashed var(--line)}
@@ -690,7 +692,7 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
     <p class="about-line"><span class="role">UI/UX Designer</span><b>Sara Saleeth</b></p>
     <p class="about-line"><span class="role">Developer</span><b>Sufiyan Raghib</b></p>
     <div class="about-stitch"></div>
-    <p class="about-ver">v1.10 · stitched with ❤</p>
+    <p class="about-ver">v1.11 · stitched with ❤</p>
   </div>
 </div>
 
@@ -846,7 +848,7 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
     <h3>Welcome to <em style="color:var(--rust)">Wardrobe</em></h3>
     <p class="sub-t">Three stitches to get started</p>
     <div class="tut-row"><span class="tic">📸</span><div><h4>Capture, and add more</h4><p>Tap <b>＋</b>, pick a category, snap a photo — then add <b>multiple photos</b> from camera or gallery before saving.</p></div></div>
-    <div class="tut-row"><span class="tic">✨</span><div><h4>AI Style Match</h4><p>Open any item and tap <b>✨ AI Style Match</b> — the AI stylist picks matching accessories &amp; dresses from YOUR wardrobe (free OpenRouter key; 📴 Offline match works without internet).</p></div></div>
+    <div class="tut-row"><span class="tic">✨</span><div><h4>AI Style Match</h4><p>Open any item and tap <b>✨ AI Style Match</b>. Set your own model in ⚙ (any OpenRouter model, vision or text) or leave blank for automatic free vision models.</p></div></div>
     <div class="tut-row"><span class="tic">⭐</span><div><h4>Find it again</h4><p>Heart your favourites, search by name, description or type, zoom with ＋/− and swipe through photos. Use 💾 Backup in ☰ before updating the app.</p></div></div>
     <button class="btn primary" id="tutGo" style="width:100%;margin-top:16px">Start organising →</button>
   </div>
@@ -1216,7 +1218,7 @@ async function addCategoryFlow(){
   const res = await dialog({
     title:'New category', msg:'', kind:'cat',
     extra:`<input class="field" id="dlgInput" maxlength="30" placeholder="Category name (e.g., Shoes)">
-           <div class="emoji-row" id="emoRow">${['🗂️','👟','','🕶️','','👒','🩱','🧥','👔','🩴','🎀','🧵'].map((e,i) =>
+           <div class="emoji-row" id="emoRow">${['🗂️','👟','','🕶️','','👒','','🧥','👔','🩴','','🧵'].map((e,i) =>
              `<button type="button" data-e="${e}" class="${i===0?'sel':''}">${e}</button>`).join('')}</div>
            <div class="dlg-err" id="dlgErr"></div>`,
     buttons:[{text:'Cancel', val:null, cls:'ghost'}, {text:'Create', val:'__form', cls:'primary'}]
@@ -1882,9 +1884,15 @@ $('#restoreInput').addEventListener('change', async e => {
   } catch(err){ toast('Invalid backup file', 'err'); }
 });
 
-/* ════ MODULE 11 · AI STYLE MATCH (OpenRouter, auto model failover) ════ */
+/* ════ MODULE 11 · AI STYLE MATCH (v1.11 — honest model selection) ════
+   RULES:
+   • Model field SET   → ONLY that model is used (vision or text-only).
+                         If it rejects images, same model retried text-only.
+                         Failures show exact reason + action buttons.
+   • Model field BLANK → automatic: last-good → proven vision fallbacks
+                         → live free-vision catalog from OpenRouter.        */
 const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const OR_MODELS_URL = 'https://openrouter.ai/api/v1/models';   // public catalog, no auth
+const OR_MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const OR_FALLBACK_MODELS = [
   'google/gemma-4-31b-it:free',
   'mistralai/mistral-small-3.2-24b-instruct:free',
@@ -1896,6 +1904,8 @@ const orKey       = () => localStorage.getItem('wm_or_key') || '';
 const orUserModel = () => (localStorage.getItem('wm_or_model') || '').trim();
 const orGoodModel = () => localStorage.getItem('wm_or_good') || '';
 let aiItemId = null;
+
+const shortModel = m => String(m).split('/').pop().replace(':free','');
 
 function smallCopy(dataURL, max=512, q=.7){
   return new Promise(res => {
@@ -1912,7 +1922,6 @@ function smallCopy(dataURL, max=512, q=.7){
   });
 }
 
-/* live-discover which :free models accept images right now */
 async function liveFreeVisionModels(){
   try{
     const r = await fetch(OR_MODELS_URL);
@@ -1924,38 +1933,52 @@ async function liveFreeVisionModels(){
       .map(m => m.id);
   }catch(e){ return []; }
 }
-async function modelChain(){
+async function autoChain(){
   const chain = [];
   const push = id => { if(id && !chain.includes(id)) chain.push(id); };
-  push(orUserModel());
   push(orGoodModel());
-  (await liveFreeVisionModels()).forEach(push);
   OR_FALLBACK_MODELS.forEach(push);
+  (await liveFreeVisionModels()).forEach(push);
   return chain;
 }
 
-async function callOR(key, model, prompt, img){
+/* one request; withImage=false sends a pure-text message */
+async function callOR(key, model, prompt, img, withImage){
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), 40000);
+  const content = (withImage && img)
+    ? [{ type:'text', text:prompt }, { type:'image_url', image_url:{ url:img } }]
+    : [{ type:'text', text:prompt }];
   try{
     const r = await fetch(OR_URL, {
       method:'POST', signal:ctrl.signal,
       headers:{ 'Authorization':'Bearer ' + key, 'Content-Type':'application/json', 'X-Title':'Wardrobe Style Match' },
-      body: JSON.stringify({ model, temperature:.4, messages:[{ role:'user', content:[
-        { type:'text', text:prompt },
-        { type:'image_url', image_url:{ url:img } }
-      ]}] })
+      body: JSON.stringify({ model, temperature:.4, messages:[{ role:'user', content }] })
     });
     clearTimeout(to);
     if(r.ok){
       const data = await r.json();
       return { ok:true, content: data?.choices?.[0]?.message?.content || '' };
     }
-    return { ok:false, status:r.status };
+    let errMsg = '';
+    try{ const j = await r.json(); errMsg = (j && j.error && j.error.message) || ''; }catch(_){}
+    return { ok:false, status:r.status, errMsg };
   }catch(e){
     clearTimeout(to);
-    return { ok:false, status:0, net:(e.name === 'AbortError' ? 'timeout' : 'network') };
+    return { ok:false, status:0, errMsg:(e.name === 'AbortError' ? 'timeout' : 'network') };
   }
+}
+
+/* try image first; if the model refuses images, retry SAME model text-only */
+async function askModelOnce(key, model, prompt, img){
+  let res = await callOR(key, model, prompt, img, true);
+  if (!res.ok && [400,404,415,422].includes(res.status)){
+    const res2 = await callOR(key, model, prompt + '\n(Note: use the item details above; this model receives no image.)', null, false);
+    if (res2.ok) return { ok:true, content:res2.content, textMode:true };
+    if (res2.errMsg === 'network' || res2.errMsg === 'timeout') return res2;
+  }
+  if (res.ok) return { ok:true, content:res.content, textMode:false };
+  return res;
 }
 
 const COLOR_WORDS = ['red','maroon','blue','navy','green','teal','yellow','gold','golden','pink','peach','white','cream','beige','black','grey','gray','purple','violet','orange','rust','brown','silver','ivory'];
@@ -1986,6 +2009,15 @@ function aiStatus(msg, spin=true){
   $('#aiBody').innerHTML = `<div class="ai-status">${spin?'<span class="spin"></span>':''}<span>${esc(msg)}</span></div>`;
 }
 function aiError(msg){ aiStatus(msg, false); }
+function aiErrorActions(msg){
+  $('#aiBody').innerHTML =
+    `<div class="ai-status"><span>${esc(msg)}</span></div>
+     <div class="ai-err-actions">
+       <button class="btn ghost" data-aiact="settings">⚙ Fix model</button>
+       <button class="btn ghost" data-aiact="auto">✨ Auto models</button>
+       <button class="btn primary" data-aiact="offline">📴 Offline</button>
+     </div>`;
+}
 
 function parsePicks(content){
   let arr = [];
@@ -2018,60 +2050,79 @@ function renderMatches(list, title){
     : '<p style="font-size:13px;color:var(--mut)">No matches found in your wardrobe yet — add more items.</p>');
 }
 
-async function askAI(it){
-  const key = orKey();
-  if (!key) return askKeyThen(() => askAI(it));
-  aiStatus('Consulting your AI stylist…');
-  const chain = await modelChain();
-  if (!chain.length) return aiError('No AI models reachable. Check internet, or use 📴 Offline match.');
+function buildPrompt(it, withImage){
   const inv = state.items.filter(x => x.id !== it.id).slice(0,80)
     .map(x => `${x.id} | ${pathOf(x)} | ${x.name}${x.desc ? ' | ' + x.desc.slice(0,60) : ''}`).join('\n');
-  const prompt =
-`You are a personal fashion stylist. The attached photo is the SELECTED piece: "${it.name}" (${pathOf(it)}).
-Below is the owner's wardrobe inventory (id | category | name | description).
+  return `You are a personal fashion stylist. The SELECTED piece is: "${it.name}" (${pathOf(it)})${it.desc ? ' — ' + it.desc : ''}.${withImage ? ' The attached photo shows it.' : ''}
+Below is the owner's wardrobe inventory (id | category | name | description). Never pick the selected piece itself.
 Choose 3 to 6 inventory items (accessories, jewelry, dresses, bags, footwear, beauty) that best MATCH the selected piece for a coordinated look. Consider colour harmony, occasion and style.
 Respond with ONLY valid JSON in this exact shape:
 {"matches":[{"id":"<inventory id>","reason":"<short reason, max 12 words>"}]}
 INVENTORY:
 ${inv}`;
+}
+
+async function askAI(it, forceAuto){
+  const key = orKey();
+  if (!key) return askKeyThen(() => askAI(it));
+  const userModel = forceAuto ? '' : orUserModel();
+  const prompt = buildPrompt(it, true);
   const img = await smallCopy((it.imgs||[])[0] || '');
+
+  /* ── MODE 1: user's own model, used EXCLUSIVELY ── */
+  if (userModel){
+    aiStatus(`Asking YOUR model: ${shortModel(userModel)} …`);
+    const res = await askModelOnce(key, userModel, prompt, img);
+    if (res.ok){
+      const picks = parsePicks(res.content);
+      if (picks.length){
+        renderMatches(picks, `✨ AI stylist picks · via ${shortModel(userModel)}${res.textMode ? ' (text analysis)' : ''}`);
+        return;
+      }
+      aiErrorActions(`Your model ${shortModel(userModel)} replied without usable item IDs. Retry, switch to auto, or use offline match.`);
+      return;
+    }
+    if (res.errMsg === 'network') return aiErrorActions('Network error reaching OpenRouter. Check internet, or use offline match.');
+    if (res.errMsg === 'timeout') return aiErrorActions(`Your model ${shortModel(userModel)} timed out. Retry, or use auto/offline.`);
+    if (res.status === 401 || res.status === 403) return aiErrorActions('OpenRouter rejected the key (401/403). Tap ⚙ and re-paste your key.');
+    aiErrorActions(`Your model "${shortModel(userModel)}" failed (HTTP ${res.status}${res.errMsg ? ': ' + res.errMsg.slice(0,120) : ''}). It may not exist, be rate-limited, or need a different id. Use ⚙ to correct it, or run auto models.`);
+    return;
+  }
+
+  /* ── MODE 2: automatic chain ── */
+  const chain = await autoChain();
+  if (!chain.length) return aiErrorActions('No AI models reachable. Check internet, or use offline match.');
   let tried = 0;
   for (const model of chain){
     tried++;
-    aiStatus(`AI stylist thinking… (trying model ${tried}/${chain.length})`);
-    const res = await callOR(key, model, prompt, img);
+    aiStatus(`Automatic mode · trying ${shortModel(model)} (${tried}/${chain.length}) …`);
+    const res = await askModelOnce(key, model, prompt, img);
     if (res.ok){
       const picks = parsePicks(res.content);
       if (picks.length){
         try{ localStorage.setItem('wm_or_good', model); }catch(e){}
-        renderMatches(picks, '✨ AI stylist picks · via ' + model.split('/').pop().replace(':free',''));
+        renderMatches(picks, `✨ AI stylist picks · via ${shortModel(model)}${res.textMode ? ' (text analysis)' : ''}`);
         return;
       }
-      continue;                       // unusable JSON → next model
+      continue;
     }
-    if (res.status === 401 || res.status === 403){
-      return aiError('OpenRouter rejected the key (401/403). Tap ⚙ and re-paste your key.');
-    }
-    if (res.net === 'network'){
-      return aiError('Network error reaching OpenRouter. Check internet, or use 📴 Offline match.');
-    }
-    if (res.net === 'timeout'){
-      return aiError('AI timed out on this model. Tap “Ask AI again” or use 📴 Offline match.');
-    }
-    // 404 retired model / 402 / 429 limited → silently try next model
+    if (res.status === 401 || res.status === 403) return aiErrorActions('OpenRouter rejected the key (401/403). Tap ⚙ and re-paste your key.');
+    if (res.errMsg === 'network') return aiErrorActions('Network error reaching OpenRouter. Check internet, or use offline match.');
+    if (res.errMsg === 'timeout') continue;
+    /* 404/402/429/etc → next model */
   }
-  aiError('All free models are busy or unavailable right now (free-tier limits). Wait a minute and tap “Ask AI again”, or use 📴 Offline match.');
+  aiErrorActions('All automatic free models are busy or unavailable right now (free-tier limits). Wait a minute and retry, or use offline match.');
 }
 
-/* settings dialog — SHOWS the saved key so it never looks "blank" */
+/* settings dialog — shows saved key + explains model behaviour */
 function askKeyThen(cb){
   dialog({
     title:'OpenRouter setup',
-    msg:'Your key is stored only on this device and used only when you tap AI Style Match.',
+    msg:'Key is stored only on this device. Model: enter ANY OpenRouter model id (vision or text) to use it exclusively — or leave blank for automatic free vision models.',
     extra:`<label class="lbl" for="dlgInput" style="margin-top:12px">API key (free)</label>
            <input class="field" id="dlgInput" value="${esc(orKey())}" placeholder="sk-or-v1-…">
-           <label class="lbl" for="dlgInput2">Model (optional — blank = automatic)</label>
-           <input class="field" id="dlgInput2" value="${esc(orUserModel())}" placeholder="automatic">
+           <label class="lbl" for="dlgInput2">Model (blank = automatic)</label>
+           <input class="field" id="dlgInput2" value="${esc(orUserModel())}" placeholder="e.g. nvidia/nemotron-3-vision-13b-instruct:free">
            <p class="dlg-note">${orKey() ? '✅ A key is already saved on this device.' : 'Get a free key: openrouter.ai → sign in → Settings → Keys → Create.'}</p>`,
     buttons:[{text:'Cancel', val:null, cls:'ghost'}, {text:'Save & continue', val:'__form', cls:'primary'}]
   }).then(res => {
@@ -2082,7 +2133,7 @@ function askKeyThen(cb){
       localStorage.setItem('wm_or_key', k);
       localStorage.setItem('wm_or_model', (res.extra || '').trim());
     }catch(e){ toast('Could not save on this device', 'err'); return; }
-    toast('✅ AI key saved on this device');
+    toast('✅ AI settings saved');
     cb && cb();
   });
 }
@@ -2105,7 +2156,13 @@ $('#aiOffline').addEventListener('click', () => {
 });
 $('#aiBody').addEventListener('click', e => {
   const b = e.target.closest('[data-open]');
-  if (b){ hideOv($('#aiOv')); openLightbox(b.dataset.open); }
+  if (b){ hideOv($('#aiOv')); openLightbox(b.dataset.open); return; }
+  const a = e.target.closest('[data-aiact]');
+  if (!a) return;
+  const it = state.items.find(x => x.id === aiItemId); if (!it) return;
+  if (a.dataset.aiact === 'auto')     askAI(it, true);
+  if (a.dataset.aiact === 'offline')  renderMatches(offlineMatch(it), '📴 Offline smart picks');
+  if (a.dataset.aiact === 'settings') askKeyThen(null);
 });
 
 /* ════ MODULE 12 · SPLASH ════ */

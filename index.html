@@ -2,18 +2,21 @@
 <html lang="en">
 <head>
 <!-- ═══════════════════════════════════════════════════════════════════
-  WARDROBE v1.8 — single-file Wardrobe Management PWA
+  WARDROBE v1.10 — single-file Wardrobe Management PWA
   ─────────────────────────────────────────────────────────────────────
-  v1.8 FIX — ZOOM NOW ACTUALLY WORKS:
-   The photo's entrance animation (viewIn, fill-mode both) was locking
-   the CSS transform property, so ＋/−/pinch changes were ignored.
-   Photo now uses an opacity-only fade (lbFade); zoom/pan/swipe render
-   correctly on Android WebView.
-  v1.7 • ＋/−/🔍 zoom buttons · ‹ › photo arrows · swipe · wheel zoom
-  v1.6 • Multiple photos per item · v1.5 drawer scrollbar
-  v1.4 • About · reorder · v1.2 splash · v1.1 desc/edit/backup
+  v1.10 FIXES — AI STYLE MATCH NOW RELIABLE:
+   • 404 fix: OpenRouter retires free models often; app now fetches the
+     LIVE free-vision model list from OpenRouter's public catalog and
+     auto-fails-over through models until one answers (404/429 → next)
+   • Hardcoded backup chain: gemma-4-31b:free, mistral-small-3.2-24b:free,
+     gemma-3-27b/12b/4b:free
+   • Remembers the last working model for next time
+   • ⚙ settings now SHOWS the saved key (was blank before) + optional
+     Model field (blank = automatic) + "key saved" confirmation
+   • Clearer statuses/errors; 📴 Offline match always available
+  v1.9 • AI Style Match (OpenRouter) · v1.8 zoom fix · v1.7 zoom buttons
   INTRO VIDEO: "intro.mp4" beside this HTML, or base64/https in
-  INTRO_VIDEO (Module 11). STORAGE: IndexedDB items
+  INTRO_VIDEO (Module 12). STORAGE: IndexedDB items
   { id,name,desc,cat,sub,date,fav,imgs:[dataURL,…] } + localStorage cats.
 ═══════════════════════════════════════════════════════════════════ -->
 <meta charset="UTF-8">
@@ -423,6 +426,7 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
 .lbl{display:block;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-top:14px}
 .lbl em{font-style:normal;font-weight:600;letter-spacing:.02em;text-transform:none;color:var(--mut)}
 .dlg-err{color:var(--rose);font-size:12.5px;font-weight:700;margin-top:8px;min-height:16px}
+.dlg-note{font-size:11px;color:var(--mut);margin-top:8px;line-height:1.5}
 .emoji-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .emoji-row button{width:40px;height:40px;font-size:19px;border-radius:11px;border:1.5px solid var(--line);background:#fff;transition:all .15s}
 .emoji-row button.sel{border-color:var(--rust);background:var(--rust-t);transform:scale(1.08)}
@@ -489,7 +493,7 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
 .save-btns{display:flex;gap:10px;margin-top:18px}
 .save-btns .btn{flex:1}
 
-/* ══════════ LIGHTBOX + ZOOM (v1.8: opacity-only fade so transform is free) ══════════ */
+/* ══════════ LIGHTBOX + ZOOM ══════════ */
 #lbOv{background:rgba(24,19,14,.96);flex-direction:column;padding:0;z-index:220}
 .lb-top{width:100%;display:flex;align-items:center;gap:10px;padding:calc(12px + env(safe-area-inset-top)) 14px 10px;color:#efe7da}
 #lbOv .icon-btn{background:rgba(255,253,247,.1);border-color:rgba(255,253,247,.2)}
@@ -502,8 +506,7 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
 @keyframes lbFade{from{opacity:0}to{opacity:1}}
 #lbImg{
   max-width:100%; max-height:100%; object-fit:contain; border-radius:12px;
-  animation:lbFade .25s ease both;               /* opacity ONLY — never transform */
-  will-change:transform;
+  animation:lbFade .25s ease both; will-change:transform;
   user-select:none; -webkit-user-drag:none; touch-action:none;
 }
 .lb-zoom{
@@ -540,11 +543,35 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
   font-size:13.5px;color:var(--ink2);line-height:1.55;white-space:pre-wrap;margin:10px 0 2px;
   padding:10px 13px;background:var(--paper2);border-radius:12px;border:1px dashed var(--line);
 }
-.lb-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 14px}
+.lb-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 12px}
 .lb-meta .pill{font-size:11px;font-weight:800;letter-spacing:.05em;padding:5px 11px;border-radius:999px;background:var(--paper2);color:var(--ink2)}
 .lb-meta .pill.hot{background:var(--rust-t);color:var(--rust-d)}
+.ai-cta{
+  width:100%; margin:0 0 10px; padding:12px; border-radius:13px;
+  font-weight:800; font-size:13.5px; letter-spacing:.04em;
+  background:linear-gradient(135deg,var(--rust),#8e3a1b); color:#fff8ee;
+  box-shadow:0 6px 16px rgba(176,74,36,.35);
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  transition:transform .12s;
+}
+.ai-cta:active{transform:scale(.97)}
 .lb-actions{display:flex;gap:9px}
 .lb-actions .btn{flex:1;padding:11px 6px;font-size:12.5px}
+
+/* ══════════ AI STYLE MATCH SHEET ══════════ */
+.ai-head-item{display:flex;gap:10px;align-items:center;margin-bottom:12px;padding:10px;border-radius:14px;background:var(--paper2)}
+.ai-head-item img{width:48px;height:48px;border-radius:10px;object-fit:cover;flex:0 0 auto}
+.ai-head-item b{font-size:14px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ai-head-item p{font-size:11px;color:var(--mut);margin-top:2px}
+.ai-status{display:flex;align-items:center;gap:10px;padding:14px;border-radius:13px;background:var(--paper2);font-size:13px;color:var(--ink2);font-weight:600;line-height:1.45}
+.spin{width:18px;height:18px;border-radius:50%;border:2.5px solid var(--rust-t);border-top-color:var(--rust);animation:spin .8s linear infinite;flex:0 0 auto}
+.match-row{display:flex;gap:10px;align-items:center;padding:10px;border-radius:14px;border:1.5px solid var(--line);background:#fff;margin-bottom:8px;text-align:left;width:100%;transition:all .15s}
+.match-row:active{border-color:var(--rust);transform:scale(.99)}
+.match-row img{width:56px;height:56px;border-radius:10px;object-fit:cover;flex:0 0 auto}
+.mr-main{flex:1;min-width:0}
+.mr-main h4{font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mr-main p{font-size:11px;color:var(--mut);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mr-main .why{display:block;font-size:11px;color:var(--rust-d);margin-top:3px;line-height:1.4}
 
 /* tutorial */
 .tut-row{display:flex;gap:14px;align-items:flex-start;padding:13px 0;border-bottom:1.5px dashed var(--line)}
@@ -651,7 +678,7 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
   </div>
 </aside>
 
-<!-- ═══ ABOUT ═ -->
+<!-- ═══ ABOUT ══ -->
 <div class="overlay" id="aboutOv">
   <div class="sheet about-sheet">
     <button class="about-x" id="aboutClose" aria-label="Close about window">✕</button>
@@ -663,7 +690,7 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
     <p class="about-line"><span class="role">UI/UX Designer</span><b>Sara Saleeth</b></p>
     <p class="about-line"><span class="role">Developer</span><b>Sufiyan Raghib</b></p>
     <div class="about-stitch"></div>
-    <p class="about-ver">v1.8 · stitched with ❤</p>
+    <p class="about-ver">v1.10 · stitched with ❤</p>
   </div>
 </div>
 
@@ -684,7 +711,7 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
   </div>
 </div>
 
-<!-- ═══ CAMERA ═══ -->
+<!-- ═══ CAMERA ══ -->
 <div class="overlay" id="camOv">
   <div class="cam-top">
     <button class="icon-btn" id="camClose" aria-label="Close camera">
@@ -775,10 +802,30 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
       <span class="pill" id="lbDate"></span>
       <span class="pill">🤏 pinch · ＋/− zoom · swipe ⇄</span>
     </div>
+    <button class="ai-cta" id="lbAiMatch">✨ AI Style Match — find pairs in my wardrobe</button>
     <div class="lb-actions">
       <button class="btn ghost" id="lbEdit">✎ Edit</button>
       <button class="btn ghost" id="lbRetag">🏷 Retag</button>
       <button class="btn danger" id="lbDelete">🗑 Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ AI STYLE MATCH SHEET ═══ -->
+<div class="overlay" id="aiOv">
+  <div class="sheet">
+    <div class="pk-head">
+      <h3 style="flex:1">AI Style Match</h3>
+      <button class="icon-btn" id="aiSettings" aria-label="AI settings">⚙</button>
+      <button class="icon-btn" id="aiClose" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="ai-head-item" id="aiHeadItem"></div>
+    <div id="aiBody"></div>
+    <div class="save-btns">
+      <button class="btn ghost" id="aiOffline">📴 Offline match</button>
+      <button class="btn primary" id="aiRetry">✨ Ask AI again</button>
     </div>
   </div>
 </div>
@@ -799,8 +846,8 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
     <h3>Welcome to <em style="color:var(--rust)">Wardrobe</em></h3>
     <p class="sub-t">Three stitches to get started</p>
     <div class="tut-row"><span class="tic">📸</span><div><h4>Capture, and add more</h4><p>Tap <b>＋</b>, pick a category, snap a photo — then add <b>multiple photos</b> from camera or gallery before saving.</p></div></div>
-    <div class="tut-row"><span class="tic">🔍</span><div><h4>Zoom &amp; browse photos</h4><p>Open any item and use the <b>＋ / −</b> buttons (or pinch) to zoom, and <b>swipe left/right</b> or tap the ‹ › arrows to see all photos of that item.</p></div></div>
-    <div class="tut-row"><span class="tic">⭐</span><div><h4>Find it again</h4><p>Heart your favourites, search by name, description or type. Use 💾 Backup in ☰ before updating the app.</p></div></div>
+    <div class="tut-row"><span class="tic">✨</span><div><h4>AI Style Match</h4><p>Open any item and tap <b>✨ AI Style Match</b> — the AI stylist picks matching accessories &amp; dresses from YOUR wardrobe (free OpenRouter key; 📴 Offline match works without internet).</p></div></div>
+    <div class="tut-row"><span class="tic">⭐</span><div><h4>Find it again</h4><p>Heart your favourites, search by name, description or type, zoom with ＋/− and swipe through photos. Use 💾 Backup in ☰ before updating the app.</p></div></div>
     <button class="btn primary" id="tutGo" style="width:100%;margin-top:16px">Start organising →</button>
   </div>
 </div>
@@ -1169,7 +1216,7 @@ async function addCategoryFlow(){
   const res = await dialog({
     title:'New category', msg:'', kind:'cat',
     extra:`<input class="field" id="dlgInput" maxlength="30" placeholder="Category name (e.g., Shoes)">
-           <div class="emoji-row" id="emoRow">${['🗂️','','','🕶️','','👒','🩱','🧥','👔','🩴','🎀','🧵'].map((e,i) =>
+           <div class="emoji-row" id="emoRow">${['🗂️','👟','','🕶️','','👒','🩱','🧥','👔','🩴','🎀','🧵'].map((e,i) =>
              `<button type="button" data-e="${e}" class="${i===0?'sel':''}">${e}</button>`).join('')}</div>
            <div class="dlg-err" id="dlgErr"></div>`,
     buttons:[{text:'Cancel', val:null, cls:'ghost'}, {text:'Create', val:'__form', cls:'primary'}]
@@ -1260,7 +1307,7 @@ function dialog(opts){
         if (b.val === '__form'){
           const inp = $('#dlgInput'); const err = $('#dlgErr');
           const val = inp ? inp.value.trim() : '';
-          if (!val){ if (err) err.textContent = 'Please enter a name.'; return; }
+          if (!val){ if (err) err.textContent = 'Please fill the required field.'; return; }
           if (opts.kind === 'cat' && isDupCat(val, opts.except)){ if (err) err.textContent = 'A category with this name already exists.'; return; }
           if (opts.kind === 'sub' && opts.catObj && opts.catObj.subs.some(s => s.toLowerCase() === val.toLowerCase())){ if (err) err.textContent = 'That type already exists here.'; return; }
           const inp2 = $('#dlgInput2');
@@ -1526,7 +1573,7 @@ $('#svSave').addEventListener('click', async () => {
   else { render(); syncNav(); }
 });
 
-/* ════ MODULE 8 · LIGHTBOX + ZOOM + PHOTO NAV (v1.8 fixed) ════ */
+/* ════ MODULE 8 · LIGHTBOX + ZOOM + PHOTO NAV ════ */
 function openLightbox(id){
   const it = state.items.find(x => x.id === id); if (!it) return;
   lbItemId = id; lbIdx = 0;
@@ -1762,6 +1809,7 @@ document.addEventListener('click', e => {
     else if (id === 'saveOv') closeSaveSheet('Discarded');
     else if (id === 'pickerOv') pickerPick(null);
     else if (id === 'lbOv') closeLightbox();
+    else if (id === 'aiOv') hideOv($('#aiOv'));
     else if (id === 'aboutOv') hideOv($('#aboutOv'));
     else if (id === 'dlgOv' && e.target._close) e.target._close();
   }
@@ -1773,6 +1821,7 @@ document.addEventListener('keydown', e => {
   if (isOv($('#saveOv')))      { closeSaveSheet('Discarded'); return; }
   if (isOv($('#camOv')))       { closeCamera(); return; }
   if (isOv($('#lbOv')))        { closeLightbox(); return; }
+  if (isOv($('#aiOv')))        { hideOv($('#aiOv')); return; }
   if (isOv($('#aboutOv')))     { hideOv($('#aboutOv')); return; }
   if (isOv($('#tutOv')))       { dismissTut(); return; }
   if ($('#drawer').classList.contains('show')) closeDrawer();
@@ -1833,7 +1882,233 @@ $('#restoreInput').addEventListener('change', async e => {
   } catch(err){ toast('Invalid backup file', 'err'); }
 });
 
-/* ════ MODULE 11 · SPLASH ════ */
+/* ════ MODULE 11 · AI STYLE MATCH (OpenRouter, auto model failover) ════ */
+const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OR_MODELS_URL = 'https://openrouter.ai/api/v1/models';   // public catalog, no auth
+const OR_FALLBACK_MODELS = [
+  'google/gemma-4-31b-it:free',
+  'mistralai/mistral-small-3.2-24b-instruct:free',
+  'google/gemma-3-27b-it:free',
+  'google/gemma-3-12b-it:free',
+  'google/gemma-3-4b-it:free'
+];
+const orKey       = () => localStorage.getItem('wm_or_key') || '';
+const orUserModel = () => (localStorage.getItem('wm_or_model') || '').trim();
+const orGoodModel = () => localStorage.getItem('wm_or_good') || '';
+let aiItemId = null;
+
+function smallCopy(dataURL, max=512, q=.7){
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      const sc = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      res(c.toDataURL('image/jpeg', q));
+    };
+    img.onerror = () => res(dataURL);
+    img.src = dataURL;
+  });
+}
+
+/* live-discover which :free models accept images right now */
+async function liveFreeVisionModels(){
+  try{
+    const r = await fetch(OR_MODELS_URL);
+    if(!r.ok) return [];
+    const d = await r.json();
+    return (d.data || [])
+      .filter(m => typeof m.id === 'string' && m.id.endsWith(':free') &&
+        ((m.architecture && m.architecture.input_modalities) || []).includes('image'))
+      .map(m => m.id);
+  }catch(e){ return []; }
+}
+async function modelChain(){
+  const chain = [];
+  const push = id => { if(id && !chain.includes(id)) chain.push(id); };
+  push(orUserModel());
+  push(orGoodModel());
+  (await liveFreeVisionModels()).forEach(push);
+  OR_FALLBACK_MODELS.forEach(push);
+  return chain;
+}
+
+async function callOR(key, model, prompt, img){
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 40000);
+  try{
+    const r = await fetch(OR_URL, {
+      method:'POST', signal:ctrl.signal,
+      headers:{ 'Authorization':'Bearer ' + key, 'Content-Type':'application/json', 'X-Title':'Wardrobe Style Match' },
+      body: JSON.stringify({ model, temperature:.4, messages:[{ role:'user', content:[
+        { type:'text', text:prompt },
+        { type:'image_url', image_url:{ url:img } }
+      ]}] })
+    });
+    clearTimeout(to);
+    if(r.ok){
+      const data = await r.json();
+      return { ok:true, content: data?.choices?.[0]?.message?.content || '' };
+    }
+    return { ok:false, status:r.status };
+  }catch(e){
+    clearTimeout(to);
+    return { ok:false, status:0, net:(e.name === 'AbortError' ? 'timeout' : 'network') };
+  }
+}
+
+const COLOR_WORDS = ['red','maroon','blue','navy','green','teal','yellow','gold','golden','pink','peach','white','cream','beige','black','grey','gray','purple','violet','orange','rust','brown','silver','ivory'];
+function offlineMatch(it){
+  const selIsCloth = (catById(it.cat)?.id === 'clothes');
+  const pool = state.items.filter(x => x.id !== it.id);
+  const words = (it.name + ' ' + (it.desc||'')).toLowerCase();
+  const myColors = COLOR_WORDS.filter(w => words.includes(w));
+  return pool.map(x => {
+    const t = (x.name + ' ' + (x.desc||'')).toLowerCase();
+    const xIsCloth = (catById(x.cat)?.id === 'clothes');
+    let s = Math.random() * .8;
+    if (selIsCloth !== xIsCloth) s += 2;
+    myColors.forEach(w => { if (t.includes(w)) s += 3; });
+    return { x, s };
+  }).sort((a,b) => b.s - a.s).slice(0,6)
+    .map(({x,s}) => ({ item:x, why: s > 2.5 ? 'Shares colour/style cues with your pick' : 'Complements this piece by category' }));
+}
+
+function aiSheetShow(it){
+  aiItemId = it.id;
+  $('#aiHeadItem').innerHTML =
+    `<img src="${(it.imgs||[])[0]||''}" alt="">
+     <div style="min-width:0"><b>${esc(it.name)}</b><p>${esc(pathOf(it))}</p></div>`;
+  showOv($('#aiOv'));
+}
+function aiStatus(msg, spin=true){
+  $('#aiBody').innerHTML = `<div class="ai-status">${spin?'<span class="spin"></span>':''}<span>${esc(msg)}</span></div>`;
+}
+function aiError(msg){ aiStatus(msg, false); }
+
+function parsePicks(content){
+  let arr = [];
+  try { arr = JSON.parse(content).matches || []; }
+  catch(_){
+    const m = content.match(/\{[\s\S]*\}/);
+    if (m){ try { arr = JSON.parse(m[0]).matches || []; } catch(__){} }
+  }
+  if (!Array.isArray(arr) || !arr.length){
+    arr = state.items.map(x => x.id).filter(id => content.includes(id)).slice(0,6).map(id => ({ id, reason:'' }));
+  }
+  return arr.map(p => {
+    const item = state.items.find(x => x.id === String(p.id));
+    return item ? { item, why:String(p.reason||'').slice(0,90) } : null;
+  }).filter(Boolean).slice(0,8);
+}
+
+function renderMatches(list, title){
+  $('#aiBody').innerHTML =
+    `<p class="section-label" style="margin:0 0 10px">${esc(title)}</p>` +
+    (list.length ? list.map(m => `
+      <button class="match-row" data-open="${m.item.id}">
+        <img src="${(m.item.imgs||[])[0]||''}" alt="">
+        <span class="mr-main">
+          <h4>${esc(m.item.name)}</h4>
+          <p>${esc(pathOf(m.item))}</p>
+          ${m.why ? `<span class="why">${esc(m.why)}</span>` : ''}
+        </span>
+      </button>`).join('')
+    : '<p style="font-size:13px;color:var(--mut)">No matches found in your wardrobe yet — add more items.</p>');
+}
+
+async function askAI(it){
+  const key = orKey();
+  if (!key) return askKeyThen(() => askAI(it));
+  aiStatus('Consulting your AI stylist…');
+  const chain = await modelChain();
+  if (!chain.length) return aiError('No AI models reachable. Check internet, or use 📴 Offline match.');
+  const inv = state.items.filter(x => x.id !== it.id).slice(0,80)
+    .map(x => `${x.id} | ${pathOf(x)} | ${x.name}${x.desc ? ' | ' + x.desc.slice(0,60) : ''}`).join('\n');
+  const prompt =
+`You are a personal fashion stylist. The attached photo is the SELECTED piece: "${it.name}" (${pathOf(it)}).
+Below is the owner's wardrobe inventory (id | category | name | description).
+Choose 3 to 6 inventory items (accessories, jewelry, dresses, bags, footwear, beauty) that best MATCH the selected piece for a coordinated look. Consider colour harmony, occasion and style.
+Respond with ONLY valid JSON in this exact shape:
+{"matches":[{"id":"<inventory id>","reason":"<short reason, max 12 words>"}]}
+INVENTORY:
+${inv}`;
+  const img = await smallCopy((it.imgs||[])[0] || '');
+  let tried = 0;
+  for (const model of chain){
+    tried++;
+    aiStatus(`AI stylist thinking… (trying model ${tried}/${chain.length})`);
+    const res = await callOR(key, model, prompt, img);
+    if (res.ok){
+      const picks = parsePicks(res.content);
+      if (picks.length){
+        try{ localStorage.setItem('wm_or_good', model); }catch(e){}
+        renderMatches(picks, '✨ AI stylist picks · via ' + model.split('/').pop().replace(':free',''));
+        return;
+      }
+      continue;                       // unusable JSON → next model
+    }
+    if (res.status === 401 || res.status === 403){
+      return aiError('OpenRouter rejected the key (401/403). Tap ⚙ and re-paste your key.');
+    }
+    if (res.net === 'network'){
+      return aiError('Network error reaching OpenRouter. Check internet, or use 📴 Offline match.');
+    }
+    if (res.net === 'timeout'){
+      return aiError('AI timed out on this model. Tap “Ask AI again” or use 📴 Offline match.');
+    }
+    // 404 retired model / 402 / 429 limited → silently try next model
+  }
+  aiError('All free models are busy or unavailable right now (free-tier limits). Wait a minute and tap “Ask AI again”, or use 📴 Offline match.');
+}
+
+/* settings dialog — SHOWS the saved key so it never looks "blank" */
+function askKeyThen(cb){
+  dialog({
+    title:'OpenRouter setup',
+    msg:'Your key is stored only on this device and used only when you tap AI Style Match.',
+    extra:`<label class="lbl" for="dlgInput" style="margin-top:12px">API key (free)</label>
+           <input class="field" id="dlgInput" value="${esc(orKey())}" placeholder="sk-or-v1-…">
+           <label class="lbl" for="dlgInput2">Model (optional — blank = automatic)</label>
+           <input class="field" id="dlgInput2" value="${esc(orUserModel())}" placeholder="automatic">
+           <p class="dlg-note">${orKey() ? '✅ A key is already saved on this device.' : 'Get a free key: openrouter.ai → sign in → Settings → Keys → Create.'}</p>`,
+    buttons:[{text:'Cancel', val:null, cls:'ghost'}, {text:'Save & continue', val:'__form', cls:'primary'}]
+  }).then(res => {
+    if (!res) return;
+    const k = (res.val || '').trim();
+    if (!k){ toast('API key is required for AI match', 'err'); return; }
+    try{
+      localStorage.setItem('wm_or_key', k);
+      localStorage.setItem('wm_or_model', (res.extra || '').trim());
+    }catch(e){ toast('Could not save on this device', 'err'); return; }
+    toast('✅ AI key saved on this device');
+    cb && cb();
+  });
+}
+
+$('#lbAiMatch').addEventListener('click', () => {
+  const it = state.items.find(x => x.id === lbItemId);
+  if (!it) return;
+  aiSheetShow(it);
+  askAI(it);
+});
+$('#aiClose').addEventListener('click', () => hideOv($('#aiOv')));
+$('#aiSettings').addEventListener('click', () => askKeyThen(null));
+$('#aiRetry').addEventListener('click', () => {
+  const it = state.items.find(x => x.id === aiItemId);
+  if (it) askAI(it);
+});
+$('#aiOffline').addEventListener('click', () => {
+  const it = state.items.find(x => x.id === aiItemId);
+  if (it) renderMatches(offlineMatch(it), '📴 Offline smart picks');
+});
+$('#aiBody').addEventListener('click', e => {
+  const b = e.target.closest('[data-open]');
+  if (b){ hideOv($('#aiOv')); openLightbox(b.dataset.open); }
+});
+
+/* ════ MODULE 12 · SPLASH ════ */
 const INTRO_VIDEO = '';   // ← optional: "data:video/mp4;base64,...." or "https://…/intro.mp4"
 const SPLASH_CSS_MS = 7900;
 
@@ -1880,7 +2155,7 @@ function initSplash(after){
   timer = setTimeout(finish, 30000);
 }
 
-/* ════ MODULE 12 · PWA EXTRAS ════ */
+/* ════ MODULE 13 · PWA EXTRAS ════ */
 const ICON_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='#b04a24'/><path d='M32 14a6.5 6.5 0 0 1 6.5 6.5c0 2.9-1.9 4.5-4.2 5.7-1.4.8-2.3 1.4-2.3 2.8v.6l20 12c2.4 1.4 1.5 5-1.2 5H13.2c-2.7 0-3.6-3.6-1.2-5l20-12' fill='none' stroke='#f9f5ec' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/></svg>`;
 try {
   const manifest = {

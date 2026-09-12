@@ -2,19 +2,17 @@
 <html lang="en">
 <head>
 <!-- ═══════════════════════════════════════════════════════════════════
-  WARDROBE v1.11 — single-file Wardrobe Management PWA
+  WARDROBE v1.12 — single-file Wardrobe Management PWA
   ─────────────────────────────────────────────────────────────────────
-  v1.11 FIX — MODEL SELECTION REBUILT:
-   • If a Model is set in ⚙ → ONLY that model is used (any model:
-     vision OR text). No silent switching to other models.
-   • Text-only models (e.g. Nvidia free) now work: if the model rejects
-     the image, the SAME model is retried in text-only mode.
-   • Failures show the exact OpenRouter error + action buttons
-     (⚙ Fix model / ✨ Auto models / 📴 Offline) instead of silently
-     falling over to another model.
-   • Auto mode (Model blank): last-good → proven vision fallbacks →
-     live free-vision catalog; result label names the model used.
-  v1.10 • live free-vision discovery + failover · key visible in ⚙
+  v1.12 NEW — 📸 CAPTURE BUTTON (system camera):
+   • Works inside WebView APKs where live getUserMedia is blocked
+     (uses <input capture="environment"> → Android's camera app via
+     the same file-picker path that already works)
+   • Added in: save sheet (📸 Capture), camera bottom bar (📸), and
+     camera-error screen (📸 Capture)
+   • Photo returns through the same compress → thumbnail → save flow
+   •  Live cam kept for browsers / PWA where getUserMedia works
+  v1.11 • honest model selection (your model only / text-mode retry)
   INTRO VIDEO: "intro.mp4" beside this HTML, or base64/https in
   INTRO_VIDEO (Module 12). STORAGE: IndexedDB items
   { id,name,desc,cat,sub,date,fav,imgs:[dataURL,…] } + localStorage cats.
@@ -461,19 +459,19 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
 .cam-stage{flex:1;width:100%;display:flex;align-items:center;justify-content:center;padding:8px 14px;min-height:0}
 #camVideo{width:100%;max-height:100%;aspect-ratio:3/4;object-fit:cover;border-radius:20px;background:#000;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 #camVideo.mirror{transform:scaleX(-1)}
-.cam-err{color:#f3e9dc;text-align:center;max-width:300px;display:none}
+.cam-err{color:#f3e9dc;text-align:center;max-width:320px;display:none}
 .cam-err .big{font-size:40px}
 .cam-err h4{font-family:var(--serif);font-size:20px;margin:10px 0 6px}
 .cam-err p{font-size:13px;color:#bfb3a1;line-height:1.5;margin-bottom:16px}
-.cam-err .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-.cam-bot{width:100%;display:flex;align-items:center;justify-content:space-evenly;padding:16px 20px calc(22px + env(safe-area-inset-bottom))}
+.cam-err .row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.cam-bot{width:100%;display:flex;align-items:center;justify-content:space-evenly;padding:16px 12px calc(22px + env(safe-area-inset-bottom))}
 #shutter{
-  width:76px;height:76px;border-radius:50%;border:4px solid #efe7da;position:relative;transition:transform .15s;
+  width:72px;height:72px;border-radius:50%;border:4px solid #efe7da;position:relative;transition:transform .15s;
 }
 #shutter::after{content:"";position:absolute;inset:5px;border-radius:50%;background:#efe7da;transition:all .15s}
 #shutter:active{transform:scale(.92)}
 #shutter:active::after{background:var(--rust)}
-.cam-side{width:48px;height:48px;border-radius:50%;background:rgba(255,253,247,.12);display:grid;place-items:center;color:#efe7da;font-size:20px}
+.cam-side{width:46px;height:46px;border-radius:50%;background:rgba(255,253,247,.12);display:grid;place-items:center;color:#efe7da;font-size:19px}
 .cam-side:active{transform:scale(.9)}
 
 /* save sheet */
@@ -485,8 +483,8 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
 .sv-th img{width:100%;height:100%;object-fit:cover}
 .sv-x{position:absolute;top:3px;right:3px;width:19px;height:19px;border-radius:50%;background:rgba(36,31,25,.78);color:#fff;font-size:9px;font-weight:800;display:grid;place-items:center}
 .cov{position:absolute;left:0;right:0;bottom:0;background:rgba(176,74,36,.92);color:#fff;font-size:7.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;text-align:center;padding:2px 0}
-.sv-addrow{display:flex;gap:8px;margin-top:10px}
-.sv-addrow .btn{flex:1;padding:10px 4px;font-size:12px}
+.sv-addrow{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.sv-addrow .btn{flex:1 1 45%;padding:10px 4px;font-size:12px}
 .sv-count{font-size:11px;color:var(--mut);font-weight:700;margin-top:8px;letter-spacing:.06em}
 .tag-chip{display:inline-flex;align-items:center;gap:7px;margin-top:14px;padding:7px 13px;border-radius:999px;
   background:var(--rust-t);color:var(--rust-d);font-size:12.5px;font-weight:800;border:1px dashed rgba(176,74,36,.4)}
@@ -692,7 +690,7 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
     <p class="about-line"><span class="role">UI/UX Designer</span><b>Sara Saleeth</b></p>
     <p class="about-line"><span class="role">Developer</span><b>Sufiyan Raghib</b></p>
     <div class="about-stitch"></div>
-    <p class="about-ver">v1.11 · stitched with ❤</p>
+    <p class="about-ver">v1.12 · stitched with ❤</p>
   </div>
 </div>
 
@@ -732,13 +730,15 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
       <p id="camErrMsg"></p>
       <div class="row">
         <button class="btn primary slim" id="camRetry">Try again</button>
-        <button class="btn ghost slim" id="camUpload" style="background:rgba(255,253,247,.12);border-color:rgba(255,253,247,.35);color:#efe7da">Upload photo</button>
+        <button class="btn ghost slim" id="camCapture" style="background:rgba(255,253,247,.12);border-color:rgba(255,253,247,.35);color:#efe7da">📸 Capture</button>
+        <button class="btn ghost slim" id="camUpload" style="background:rgba(255,253,247,.12);border-color:rgba(255,253,247,.35);color:#efe7da">Upload</button>
       </div>
     </div>
   </div>
   <div class="cam-bot">
     <button class="cam-side" id="camUpload2" aria-label="Upload from gallery">🖼️</button>
-    <button id="shutter" aria-label="Capture photo"></button>
+    <button id="shutter" aria-label="Capture photo (live)"></button>
+    <button class="cam-side" id="camCapture2" aria-label="Capture with system camera">📸</button>
     <button class="cam-side" id="camFlip2" aria-label="Flip camera">🔄</button>
   </div>
 </div>
@@ -752,7 +752,8 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
     <div class="sv-gallery" id="svGallery"></div>
     <p class="sv-count" id="svCount"></p>
     <div class="sv-addrow">
-      <button class="btn ghost" id="svCam">📷 Camera</button>
+      <button class="btn ghost" id="svCapture">📸 Capture</button>
+      <button class="btn ghost" id="svCam">📷 Live cam</button>
       <button class="btn ghost" id="svFiles">🖼 Gallery</button>
       <button class="btn ghost" id="svCover" style="display:none">★ Cover</button>
     </div>
@@ -802,7 +803,7 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
     <div class="lb-meta">
       <span class="pill hot" id="lbPath"></span>
       <span class="pill" id="lbDate"></span>
-      <span class="pill">🤏 pinch · ＋/− zoom · swipe ⇄</span>
+      <span class="pill">🤏 pinch · /− zoom · swipe ⇄</span>
     </div>
     <button class="ai-cta" id="lbAiMatch">✨ AI Style Match — find pairs in my wardrobe</button>
     <div class="lb-actions">
@@ -847,7 +848,7 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
   <div class="sheet">
     <h3>Welcome to <em style="color:var(--rust)">Wardrobe</em></h3>
     <p class="sub-t">Three stitches to get started</p>
-    <div class="tut-row"><span class="tic">📸</span><div><h4>Capture, and add more</h4><p>Tap <b>＋</b>, pick a category, snap a photo — then add <b>multiple photos</b> from camera or gallery before saving.</p></div></div>
+    <div class="tut-row"><span class="tic">📸</span><div><h4>Capture your way</h4><p><b>📸 Capture</b> opens your phone's camera app (works everywhere). <b>📷 Live cam</b> gives an in-app viewfinder where supported. <b>🖼 Gallery</b> adds multiple photos at once.</p></div></div>
     <div class="tut-row"><span class="tic">✨</span><div><h4>AI Style Match</h4><p>Open any item and tap <b>✨ AI Style Match</b>. Set your own model in ⚙ (any OpenRouter model, vision or text) or leave blank for automatic free vision models.</p></div></div>
     <div class="tut-row"><span class="tic">⭐</span><div><h4>Find it again</h4><p>Heart your favourites, search by name, description or type, zoom with ＋/− and swipe through photos. Use 💾 Backup in ☰ before updating the app.</p></div></div>
     <button class="btn primary" id="tutGo" style="width:100%;margin-top:16px">Start organising →</button>
@@ -856,6 +857,8 @@ textarea.field{min-height:76px;resize:vertical;line-height:1.5}
 
 <div id="toasts" aria-live="polite"></div>
 <input type="file" id="fileInput" accept="image/*" multiple hidden>
+<!-- system-camera capture input: works in WebViews where getUserMedia is blocked -->
+<input type="file" id="camInput" accept="image/*" capture="environment" hidden>
 
 <script>
 'use strict';
@@ -1218,7 +1221,7 @@ async function addCategoryFlow(){
   const res = await dialog({
     title:'New category', msg:'', kind:'cat',
     extra:`<input class="field" id="dlgInput" maxlength="30" placeholder="Category name (e.g., Shoes)">
-           <div class="emoji-row" id="emoRow">${['🗂️','👟','','🕶️','','👒','','🧥','👔','🩴','','🧵'].map((e,i) =>
+           <div class="emoji-row" id="emoRow">${['🗂️','👟','','️','','','🩱','🧥','','🩴','🎀','🧵'].map((e,i) =>
              `<button type="button" data-e="${e}" class="${i===0?'sel':''}">${e}</button>`).join('')}</div>
            <div class="dlg-err" id="dlgErr"></div>`,
     buttons:[{text:'Cancel', val:null, cls:'ghost'}, {text:'Create', val:'__form', cls:'primary'}]
@@ -1376,7 +1379,7 @@ $('#pkBody').addEventListener('click', e => {
   if (subBtn) pickerPick({ cat:pkLevel, sub:subBtn.dataset.pkSub });
 });
 
-/* ════ MODULE 6 · CAMERA ════ */
+/* ════ MODULE 6 · CAMERA (live) + 📸 SYSTEM-CAMERA CAPTURE ════ */
 let stream = null, facing = 'environment';
 const videoEl = $('#camVideo');
 
@@ -1414,16 +1417,16 @@ function camError(kind){
   const box = $('#camErr'); box.style.display = 'block';
   if (kind === 'NotAllowedError' || kind === 'SecurityError'){
     $('#camErrIco').textContent = '🚫'; $('#camErrTitle').textContent = 'Camera permission denied';
-    $('#camErrMsg').textContent = 'Please allow camera access in your browser settings, then tap “Try again” — or upload a photo instead.';
+    $('#camErrMsg').textContent = 'This app wrapper blocks the live camera. Use 📸 Capture (opens your camera app) or Upload — both work perfectly.';
   } else if (kind === 'NotFoundError' || kind === 'OverconstrainedError'){
     $('#camErrIco').textContent = '📵'; $('#camErrTitle').textContent = 'No camera found';
-    $('#camErrMsg').textContent = 'This device has no usable camera. You can still add photos from your gallery.';
+    $('#camErrMsg').textContent = 'This device has no usable camera. Use 📸 Capture or Upload instead.';
   } else if (kind === 'noapi'){
-    $('#camErrIco').textContent = '🌐'; $('#camErrTitle').textContent = 'Camera not available here';
-    $('#camErrMsg').textContent = 'Live capture needs a secure context (https or localhost). Uploading an image works anywhere.';
+    $('#camErrIco').textContent = '🌐'; $('#camErrTitle').textContent = 'Live camera not available here';
+    $('#camErrMsg').textContent = 'The in-app viewfinder needs browser camera support. Use 📸 Capture (system camera) or Upload — both work.';
   } else {
     $('#camErrIco').textContent = '⚠️'; $('#camErrTitle').textContent = 'Camera unavailable';
-    $('#camErrMsg').textContent = 'Something went wrong while starting the camera. Retry, or upload a photo instead.';
+    $('#camErrMsg').textContent = 'Something went wrong starting the live camera. Use 📸 Capture or Upload instead.';
   }
 }
 function stopStream(){ if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; } if (videoEl) videoEl.srcObject = null; }
@@ -1443,10 +1446,8 @@ function capturePhoto(){
   ctx.drawImage(videoEl, 0, 0, c.width, c.height);
   let q = .85, data = c.toDataURL('image/jpeg', q);
   while (data.length > 900000 && q > .45){ q -= .12; data = c.toDataURL('image/jpeg', q); }
-  pendingImgs.push(data);
+  addPhoto(data);
   closeCamera();
-  if (svActive){ svIdx = pendingImgs.length - 1; renderSaveGallery(); }
-  else openSaveSheet();
 }
 function compressImg(img){
   const maxDim = 1000;
@@ -1472,16 +1473,37 @@ function readAndCompress(f){
     fr.readAsDataURL(f);
   });
 }
+
+/* central photo-add: keeps save-sheet state consistent everywhere */
+function addPhoto(dataURL){
+  pendingImgs.push(dataURL);
+  if (svActive){
+    svIdx = pendingImgs.length - 1;
+    renderSaveGallery();
+    if (!isOv($('#saveOv'))) showOv($('#saveOv'));
+  }
+}
+
+/* gallery (multi) */
 $('#fileInput').addEventListener('change', async e => {
   const files = [...(e.target.files || [])]; e.target.value = '';
   if (!files.length) return;
-  const wasActive = svActive;
   const list = (await Promise.all(files.map(readAndCompress))).filter(Boolean);
   if (!list.length){ toast('Could not read those images', 'err'); return; }
-  pendingImgs.push(...list);
-  if (wasActive){ svIdx = pendingImgs.length - list.length; renderSaveGallery(); showOv($('#saveOv')); }
-  else openSaveSheet();
+  list.forEach(d => addPhoto(d));
+  if (!svActive) openSaveSheet();
   toast(`${list.length} photo${list.length>1?'s':''} added`);
+});
+
+/* 📸 system-camera capture (single photo per shot) */
+$('#camInput').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  const data = await readAndCompress(f);
+  if (!data){ toast('Could not read that photo', 'err'); return; }
+  addPhoto(data);
+  if (!svActive) openSaveSheet();
+  toast('Photo captured 📸');
 });
 
 $('#shutter').addEventListener('click', capturePhoto);
@@ -1492,6 +1514,8 @@ $('#camClose').addEventListener('click', closeCamera);
 $('#camRetry').addEventListener('click', startStream);
 $('#camUpload').addEventListener('click', () => $('#fileInput').click());
 $('#camUpload2').addEventListener('click', () => $('#fileInput').click());
+$('#camCapture').addEventListener('click', () => $('#camInput').click());
+$('#camCapture2').addEventListener('click', () => $('#camInput').click());
 $('#camTag').addEventListener('click', async () => {
   const t = await pickTag(pendingTag);
   if (t){ pendingTag = t; $('#camTag').textContent = '🏷 ' + tagLabel(t); }
@@ -1547,6 +1571,7 @@ $('#svCover').addEventListener('click', () => {
     renderSaveGallery(); toast('Cover photo updated');
   }
 });
+$('#svCapture').addEventListener('click', () => $('#camInput').click());
 $('#svCam').addEventListener('click', () => { hideOv($('#saveOv')); openCamera(); });
 $('#svFiles').addEventListener('click', () => $('#fileInput').click());
 $('#svDiscard').addEventListener('click', () => closeSaveSheet('Discarded'));
@@ -1884,13 +1909,7 @@ $('#restoreInput').addEventListener('change', async e => {
   } catch(err){ toast('Invalid backup file', 'err'); }
 });
 
-/* ════ MODULE 11 · AI STYLE MATCH (v1.11 — honest model selection) ════
-   RULES:
-   • Model field SET   → ONLY that model is used (vision or text-only).
-                         If it rejects images, same model retried text-only.
-                         Failures show exact reason + action buttons.
-   • Model field BLANK → automatic: last-good → proven vision fallbacks
-                         → live free-vision catalog from OpenRouter.        */
+/* ════ MODULE 11 · AI STYLE MATCH (honest model selection) ════ */
 const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OR_MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const OR_FALLBACK_MODELS = [
@@ -1942,7 +1961,6 @@ async function autoChain(){
   return chain;
 }
 
-/* one request; withImage=false sends a pure-text message */
 async function callOR(key, model, prompt, img, withImage){
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), 40000);
@@ -1969,7 +1987,6 @@ async function callOR(key, model, prompt, img, withImage){
   }
 }
 
-/* try image first; if the model refuses images, retry SAME model text-only */
 async function askModelOnce(key, model, prompt, img){
   let res = await callOR(key, model, prompt, img, true);
   if (!res.ok && [400,404,415,422].includes(res.status)){
@@ -2069,7 +2086,6 @@ async function askAI(it, forceAuto){
   const prompt = buildPrompt(it, true);
   const img = await smallCopy((it.imgs||[])[0] || '');
 
-  /* ── MODE 1: user's own model, used EXCLUSIVELY ── */
   if (userModel){
     aiStatus(`Asking YOUR model: ${shortModel(userModel)} …`);
     const res = await askModelOnce(key, userModel, prompt, img);
@@ -2085,11 +2101,10 @@ async function askAI(it, forceAuto){
     if (res.errMsg === 'network') return aiErrorActions('Network error reaching OpenRouter. Check internet, or use offline match.');
     if (res.errMsg === 'timeout') return aiErrorActions(`Your model ${shortModel(userModel)} timed out. Retry, or use auto/offline.`);
     if (res.status === 401 || res.status === 403) return aiErrorActions('OpenRouter rejected the key (401/403). Tap ⚙ and re-paste your key.');
-    aiErrorActions(`Your model "${shortModel(userModel)}" failed (HTTP ${res.status}${res.errMsg ? ': ' + res.errMsg.slice(0,120) : ''}). It may not exist, be rate-limited, or need a different id. Use ⚙ to correct it, or run auto models.`);
+    aiErrorActions(`Your model "${shortModel(userModel)}" failed (HTTP ${res.status}${res.errMsg ? ': ' + res.errMsg.slice(0,120) : ''}). Use ⚙ to correct it, or run auto models.`);
     return;
   }
 
-  /* ── MODE 2: automatic chain ── */
   const chain = await autoChain();
   if (!chain.length) return aiErrorActions('No AI models reachable. Check internet, or use offline match.');
   let tried = 0;
@@ -2109,12 +2124,10 @@ async function askAI(it, forceAuto){
     if (res.status === 401 || res.status === 403) return aiErrorActions('OpenRouter rejected the key (401/403). Tap ⚙ and re-paste your key.');
     if (res.errMsg === 'network') return aiErrorActions('Network error reaching OpenRouter. Check internet, or use offline match.');
     if (res.errMsg === 'timeout') continue;
-    /* 404/402/429/etc → next model */
   }
   aiErrorActions('All automatic free models are busy or unavailable right now (free-tier limits). Wait a minute and retry, or use offline match.');
 }
 
-/* settings dialog — shows saved key + explains model behaviour */
 function askKeyThen(cb){
   dialog({
     title:'OpenRouter setup',
